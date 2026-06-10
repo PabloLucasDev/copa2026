@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bolao Copa 2026 - OFFICE CONT</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  </head>
+  <body>
+    <div id="root">
+      <main style="align-items:center;background:#f4f7fb;color:#162033;display:flex;font-family:Arial,sans-serif;justify-content:center;min-height:100vh;padding:24px;">
+        <section style="background:#fff;border:1px solid #dbe4ee;border-radius:8px;box-shadow:0 18px 60px rgba(20,35,55,.16);max-width:520px;padding:24px;width:100%;">
+          <h1 style="font-size:24px;margin:0 0 8px;">Carregando Bolao Copa 2026</h1>
+          <p id="boot-message" style="color:#52657a;margin:0;">
+            Se esta mensagem permanecer, abra o sistema pelo servidor local: http://127.0.0.1:5173/
+          </p>
+        </section>
+      </main>
+    </div>
+    <script>
+      window.addEventListener('error', function (event) {
+        var message = document.getElementById('boot-message');
+        if (message) {
+          message.textContent = 'Erro ao carregar o frontend: ' + (event.message || 'verifique o console do navegador.');
+          message.style.color = '#9f1d1d';
+        }
+      });
+
+      window.addEventListener('unhandledrejection', function (event) {
+        var message = document.getElementById('boot-message');
+        if (message) {
+          message.textContent = 'Erro ao iniciar o frontend: ' + ((event.reason && event.reason.message) || event.reason || 'verifique o console do navegador.');
+          message.style.color = '#9f1d1d';
+        }
+      });
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
