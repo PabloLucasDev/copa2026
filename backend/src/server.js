@@ -92,9 +92,7 @@ if (config.enableReminders) {
 
 try {
   await app.listen({
-    port: config.port,
-    host: config.host
-  });
+    port: config.port});
 } catch (error) {
   app.log.error(error);
   process.exit(1);
