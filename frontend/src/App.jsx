@@ -13,6 +13,7 @@ import neymarImage from '../images/neymar.png';
 import officeCopaLogo from '../images/logoOfficeCopa.png';
 
 const tabs = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'matches', label: 'Jogos', icon: CalendarDays },
   { id: 'ranking', label: 'Ranking', icon: Trophy },
   { id: 'profile', label: 'Perfil', icon: UserRound }
@@ -20,7 +21,7 @@ const tabs = [
 
 export function App() {
   const [user, setUser] = useState(getStoredUser());
-  const [activeTab, setActiveTab] = useState(user?.role === 'admin' ? 'dashboard' : 'matches');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [loadingSession, setLoadingSession] = useState(Boolean(user));
 
   useEffect(() => {
@@ -41,7 +42,6 @@ export function App() {
   const navTabs = useMemo(() => {
     if (user?.role === 'admin') {
       return [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         ...tabs,
         { id: 'admin', label: 'Resultados oficiais', icon: Shield },
         { id: 'test-matches-admin', label: 'Jogos de teste', icon: FlaskConical },
@@ -54,7 +54,7 @@ export function App() {
   function handleLogin(session) {
     setSession(session);
     setUser(session.user);
-    setActiveTab(session.user?.role === 'admin' ? 'dashboard' : 'matches');
+    setActiveTab('dashboard');
   }
 
   function handleLogout() {
@@ -104,7 +104,7 @@ export function App() {
 
       <main className="main-content">
         <div className="content-stage">
-          {activeTab === 'dashboard' && user.role === 'admin' && <DashboardPage onNavigate={setActiveTab} />}
+          {activeTab === 'dashboard' && <DashboardPage currentUser={user} onNavigate={setActiveTab} />}
           {activeTab === 'matches' && <MatchesPage />}
           {activeTab === 'ranking' && <RankingPage />}
           {activeTab === 'profile' && <ProfilePage onUserUpdated={setUser} />}

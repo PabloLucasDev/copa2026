@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CircleCheck, Clock, FilterX, LockKeyhole, MapPin, Swords, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CircleCheck, Clock, FilterX, LockKeyhole, MapPin, Swords, TriangleAlert, Users, X } from 'lucide-react';
 import { api } from '../api.js';
-import { getTeamNamePt } from '../components/TeamName.jsx';
+import { Avatar } from '../components/Avatar.jsx';
+import { getTeamNamePt, TeamFlag } from '../components/TeamName.jsx';
 
 const emptyFilters = {
   date: '',
@@ -14,63 +15,14 @@ const emptyFilters = {
 
 const matchDurationMs = 2.5 * 60 * 60 * 1000;
 
-const countryFlags = {
-  Algeria: '🇩🇿',
-  Argentina: '🇦🇷',
-  Australia: '🇦🇺',
-  Austria: '🇦🇹',
-  Belgium: '🇧🇪',
-  'Bosnia and Herzegovina': '🇧🇦',
-  Brazil: '🇧🇷',
-  Canada: '🇨🇦',
-  'Cabo Verde': '🇨🇻',
-  Colombia: '🇨🇴',
-  'Congo DR': '🇨🇩',
-  Croatia: '🇭🇷',
-  Curaçao: '🇨🇼',
-  Czechia: '🇨🇿',
-  Ecuador: '🇪🇨',
-  Egypt: '🇪🇬',
-  England: '🏴',
-  France: '🇫🇷',
-  Germany: '🇩🇪',
-  Ghana: '🇬🇭',
-  Haiti: '🇭🇹',
-  Iraq: '🇮🇶',
-  'IR Iran': '🇮🇷',
-  "Côte d'Ivoire": '🇨🇮',
-  Japan: '🇯🇵',
-  Jordan: '🇯🇴',
-  'Korea Republic': '🇰🇷',
-  Mexico: '🇲🇽',
-  Morocco: '🇲🇦',
-  Netherlands: '🇳🇱',
-  'New Zealand': '🇳🇿',
-  Norway: '🇳🇴',
-  Panama: '🇵🇦',
-  Paraguay: '🇵🇾',
-  Portugal: '🇵🇹',
-  Qatar: '🇶🇦',
-  'Saudi Arabia': '🇸🇦',
-  Scotland: '🏴',
-  Senegal: '🇸🇳',
-  'South Africa': '🇿🇦',
-  Spain: '🇪🇸',
-  Sweden: '🇸🇪',
-  Switzerland: '🇨🇭',
-  Tunisia: '🇹🇳',
-  Türkiye: '🇹🇷',
-  Uruguay: '🇺🇾',
-  USA: '🇺🇸',
-  Uzbekistan: '🇺🇿'
-};
-
 export function MatchesPage() {
   const [matches, setMatches] = useState([]);
   const [catalogMatches, setCatalogMatches] = useState([]);
   const [filters, setFilters] = useState(emptyFilters);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [predictionPanel, setPredictionPanel] = useState(null);
+  const [loadingPredictions, setLoadingPredictions] = useState(false);
 
   useEffect(() => {
     loadMatches().catch((error) => setMessage(error.message));
@@ -149,6 +101,20 @@ export function MatchesPage() {
     }
   }
 
+  async function openPredictions(match) {
+    setLoadingPredictions(true);
+    setMessage('');
+
+    try {
+      const result = await api(`/matches/${match.id}/predictions`);
+      setPredictionPanel(result);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoadingPredictions(false);
+    }
+  }
+
   return (
     <section className="page-section games-page">
       <header className="page-header games-header">
@@ -206,20 +172,35 @@ export function MatchesPage() {
       ) : (
         <div className="game-card-grid">
           {matches.map((match) => (
-            <MatchCard key={match.id} match={match} onSavePrediction={savePrediction} />
+            <MatchCard
+              key={match.id}
+              loadingPredictions={loadingPredictions}
+              match={match}
+              onSavePrediction={savePrediction}
+              onViewPredictions={openPredictions}
+            />
           ))}
         </div>
+      )}
+
+      {predictionPanel && (
+        <PredictionsModal
+          match={predictionPanel.match}
+          onClose={() => setPredictionPanel(null)}
+          predictions={predictionPanel.predictions}
+        />
       )}
     </section>
   );
 }
 
-function MatchCard({ match, onSavePrediction }) {
+function MatchCard({ loadingPredictions, match, onSavePrediction, onViewPredictions }) {
   const displayState = getMatchDisplayState(match);
   const isFinished = displayState === 'finished';
   const isClosed = displayState === 'closed';
   const isLive = displayState === 'live';
   const isOpen = match.prediction_open;
+  const canShowPredictions = !isOpen && (isLive || isClosed || isFinished);
   const cardStatus = isFinished ? 'finished' : isLive ? 'live' : isClosed ? 'closed' : isOpen ? 'open' : 'locked';
   const phaseLabel = match.group_name ? 'Fase de Grupos' : match.phase;
   const statusLabel = getStatusLabel(displayState, isOpen);
@@ -320,7 +301,66 @@ function MatchCard({ match, onSavePrediction }) {
           </>
         )}
       </div>
+
+      {canShowPredictions && (
+        <div className="game-card-actions">
+          <button disabled={loadingPredictions} onClick={() => onViewPredictions(match)} type="button">
+            <Users size={15} />
+            Ver palpites
+          </button>
+        </div>
+      )}
     </article>
+  );
+}
+
+function PredictionsModal({ match, onClose, predictions }) {
+  const withPrediction = predictions.filter((prediction) => prediction.has_prediction).length;
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section aria-modal="true" className="predictions-modal" role="dialog">
+        <header className="predictions-modal-header">
+          <div>
+            <span className="game-chip">{match.group_name ? `Grupo ${match.group_name}` : match.phase}</span>
+            <h2>
+              <TeamBlock name={match.team_a} />
+              <span>x</span>
+              <TeamBlock align="right" name={match.team_b} />
+            </h2>
+            <p>{withPrediction}/{predictions.length} participantes votaram</p>
+          </div>
+          <button className="icon-button" onClick={onClose} title="Fechar" type="button">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="prediction-votes-list">
+          {predictions.map((prediction) => (
+            <article className={`prediction-vote-row ${prediction.has_prediction ? '' : 'empty'}`} key={prediction.user_id}>
+              <div className="person-cell">
+                <Avatar name={prediction.name} size={34} src={prediction.profile_photo} />
+                <div>
+                  <strong>{prediction.name}</strong>
+                  <span>{prediction.email}</span>
+                </div>
+              </div>
+              <strong className="vote-score">
+                {prediction.has_prediction ? `${prediction.predicted_score_a} x ${prediction.predicted_score_b}` : 'Sem palpite'}
+              </strong>
+              <span className="vote-points">
+                {prediction.points !== null && prediction.points !== undefined
+                  ? `${prediction.points} pts`
+                  : prediction.has_prediction
+                    ? 'Aguardando resultado'
+                    : '-'}
+              </span>
+            </article>
+          ))}
+          {!predictions.length && <p className="empty-panel">Nenhum participante encontrado.</p>}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -330,8 +370,9 @@ function toScoreNumber(value) {
 }
 
 function getMatchDisplayState(match) {
-  if (match.status === 'finished') return 'finished';
-  if (match.status === 'closed') return 'closed';
+  if (match.effective_status === 'finished' || match.status === 'finished') return 'finished';
+  if (match.effective_status === 'live') return 'live';
+  if (match.effective_status === 'closed' || match.status === 'closed') return 'closed';
 
   const startsAt = getStartsAt(match);
   if (!startsAt) return match.prediction_open ? 'open' : 'locked';
@@ -368,10 +409,12 @@ function getStatusLabel(displayState, isOpen) {
 }
 
 function TeamBlock({ name, align = 'left' }) {
+  const displayName = getTeamNamePt(name);
+
   return (
     <div className={`game-team ${align === 'right' ? 'right' : ''}`}>
-      <span className="game-flag" aria-hidden="true">{countryFlags[name] || '🏳️'}</span>
-      <strong>{getTeamNamePt(name)}</strong>
+      <TeamFlag className="game-flag" name={name} />
+      <strong title={displayName}>{displayName}</strong>
     </div>
   );
 }

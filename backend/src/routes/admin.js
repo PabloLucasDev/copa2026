@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { query, withTransaction } from '../db/pool.js';
 import { parseCsv } from '../services/csv.js';
 import { parseBrasiliaDateTimeToUtc, toMysqlDateTime } from '../services/time.js';
 import { recalculateMatchScores } from '../services/scoring.js';
+
+const CORPORATE_DOMAIN = '@officecont.cnt.br';
 
 export async function adminRoutes(app) {
   app.get('/admin/users', { preHandler: app.requireAdmin }, async () => {
@@ -15,29 +18,95 @@ export async function adminRoutes(app) {
     return { users };
   });
 
+  app.post('/admin/users', { preHandler: app.requireAdmin }, async (request, reply) => {
+    const name = String(request.body?.name || '').trim();
+    const email = String(request.body?.email || '').trim().toLowerCase();
+    const password = String(request.body?.password || '');
+    const role = request.body?.role || 'user';
+    const blocked = Number(Boolean(request.body?.blocked));
+
+    validateUserInput(app, { name, email, password, role, requirePassword: true });
+
+    const [existing] = await query('SELECT id FROM users WHERE email = :email', { email });
+    if (existing) {
+      throw app.httpErrors.conflict('E-mail ja cadastrado.');
+    }
+
+    const id = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await query(
+      `INSERT INTO users (id, name, email, password_hash, role, blocked)
+       VALUES (:id, :name, :email, :passwordHash, :role, :blocked)`,
+      { id, name, email, passwordHash, role, blocked }
+    );
+
+    reply.code(201).send({
+      user: { id, name, email, role, blocked }
+    });
+  });
+
   app.patch('/admin/users/:id', { preHandler: app.requireAdmin }, async (request) => {
+    const name = request.body?.name === undefined ? undefined : String(request.body.name).trim();
+    const email = request.body?.email === undefined ? undefined : String(request.body.email).trim().toLowerCase();
+    const password = request.body?.password === undefined ? undefined : String(request.body.password);
     const role = request.body?.role;
     const blocked = request.body?.blocked;
 
-    if (role && !['user', 'admin'].includes(role)) {
-      throw app.httpErrors.badRequest('Perfil invalido.');
-    }
+    validateUserInput(app, { name, email, password, role, requirePassword: false });
 
     if (request.params.id === request.currentUser.id && (role === 'user' || blocked === true)) {
       throw app.httpErrors.badRequest('Voce nao pode bloquear ou remover seu proprio acesso admin.');
     }
 
-    await query(
-      `UPDATE users
-       SET role = COALESCE(:role, role),
-           blocked = COALESCE(:blocked, blocked)
-       WHERE id = :id`,
-      {
+    const [user] = await query('SELECT id FROM users WHERE id = :id', { id: request.params.id });
+    if (!user) {
+      throw app.httpErrors.notFound('Usuario nao encontrado.');
+    }
+
+    if (email) {
+      const [existing] = await query('SELECT id FROM users WHERE email = :email AND id <> :id', {
         id: request.params.id,
-        role: role || null,
-        blocked: blocked === undefined ? null : Number(Boolean(blocked))
+        email
+      });
+      if (existing) {
+        throw app.httpErrors.conflict('E-mail ja cadastrado.');
       }
-    );
+    }
+
+    const updates = [];
+    const params = { id: request.params.id };
+
+    if (name !== undefined) {
+      updates.push('name = :name');
+      params.name = name;
+    }
+
+    if (email !== undefined) {
+      updates.push('email = :email');
+      params.email = email;
+    }
+
+    if (password) {
+      updates.push('password_hash = :passwordHash');
+      params.passwordHash = await bcrypt.hash(password, 12);
+    }
+
+    if (role !== undefined) {
+      updates.push('role = :role');
+      params.role = role;
+    }
+
+    if (blocked !== undefined) {
+      updates.push('blocked = :blocked');
+      params.blocked = Number(Boolean(blocked));
+    }
+
+    if (!updates.length) {
+      return { ok: true };
+    }
+
+    await query(`UPDATE users SET ${updates.join(', ')} WHERE id = :id`, params);
 
     return { ok: true };
   });
@@ -84,6 +153,28 @@ export async function adminRoutes(app) {
 
     if (!result.affectedRows) {
       throw app.httpErrors.notFound('Jogo nao encontrado.');
+    }
+
+    return { ok: true };
+  });
+
+  app.patch('/admin/matches/:id/status', { preHandler: app.requireAdmin }, async (request) => {
+    const status = request.body?.status;
+
+    if (!['scheduled', 'closed'].includes(status)) {
+      throw app.httpErrors.badRequest('Status invalido.');
+    }
+
+    const result = await query(
+      `UPDATE matches
+       SET status = :status
+       WHERE id = :id
+         AND status <> 'finished'`,
+      { id: request.params.id, status }
+    );
+
+    if (!result.affectedRows) {
+      throw app.httpErrors.notFound('Jogo nao encontrado ou ja finalizado.');
     }
 
     return { ok: true };
@@ -172,6 +263,12 @@ function normalizeMatchPayload(payload) {
   const officialScoreA = payload.official_score_a ?? payload.placar_oficial_a ?? null;
   const officialScoreB = payload.official_score_b ?? payload.placar_oficial_b ?? null;
 
+  const status = payload.status || (officialScoreA !== null && officialScoreB !== null ? 'finished' : 'scheduled');
+
+  if (!['scheduled', 'closed', 'finished'].includes(status)) {
+    throw new Error('Status do jogo invalido.');
+  }
+
   return {
     id: payload.id || crypto.randomUUID(),
     date,
@@ -185,7 +282,7 @@ function normalizeMatchPayload(payload) {
     city: payload.city || payload.cidade || null,
     official_score_a: officialScoreA === '' ? null : officialScoreA,
     official_score_b: officialScoreB === '' ? null : officialScoreB,
-    status: payload.status || (officialScoreA !== null && officialScoreB !== null ? 'finished' : 'scheduled')
+    status
   };
 }
 
@@ -241,4 +338,28 @@ async function readCsvUpload(request) {
   }
 
   return { fileText: '' };
+}
+
+function validateUserInput(app, { name, email, password, role, requirePassword }) {
+  if (name !== undefined && !name) {
+    throw app.httpErrors.badRequest('Nome e obrigatorio.');
+  }
+
+  if (email !== undefined) {
+    if (!email) {
+      throw app.httpErrors.badRequest('E-mail e obrigatorio.');
+    }
+
+    if (!email.endsWith(CORPORATE_DOMAIN)) {
+      throw app.httpErrors.badRequest(`Use um e-mail corporativo ${CORPORATE_DOMAIN}.`);
+    }
+  }
+
+  if ((requirePassword || password) && (!password || password.length < 8)) {
+    throw app.httpErrors.badRequest('A senha deve ter pelo menos 8 caracteres.');
+  }
+
+  if (role !== undefined && !['user', 'admin'].includes(role)) {
+    throw app.httpErrors.badRequest('Perfil invalido.');
+  }
 }

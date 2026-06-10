@@ -19,7 +19,7 @@ export async function predictionRoutes(app) {
       throw app.httpErrors.notFound('Jogo nao encontrado.');
     }
 
-    if (match.status === 'finished' || !isPredictionOpen(match)) {
+    if (!isPredictionOpen(match)) {
       throw app.httpErrors.forbidden('O prazo para palpites deste jogo ja foi encerrado.');
     }
 

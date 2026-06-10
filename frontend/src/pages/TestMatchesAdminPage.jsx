@@ -139,28 +139,45 @@ export function TestMatchesAdminPage() {
 
       <h2>Jogos falsos criados</h2>
       <div className="match-list test-match-list">
-        {testMatches.map((match) => (
-          <article className="match-row" key={match.id}>
-            <div className="match-meta">
-              <strong className="inline-match">
-                <TeamName name={match.team_a} />
-                <span>x</span>
-                <TeamName name={match.team_b} />
-              </strong>
-              <span>{match.date} as {String(match.time_brasilia).slice(0, 5)} - {match.group_name || 'Teste'}</span>
-              <small>{match.stadium || match.city || 'Sem local'}</small>
-            </div>
-            <span className={`status-pill ${match.status === 'finished' ? 'closed' : 'active'}`}>
-              {match.status === 'finished' ? 'Finalizado' : 'Aberto'}
-            </span>
-            <button className="danger-button" onClick={() => deleteMatch(match)} type="button">
-              <Trash2 size={16} />
-              Excluir
-            </button>
-          </article>
-        ))}
+        {testMatches.map((match) => {
+          const status = match.effective_status || match.status;
+
+          return (
+            <article className="match-row" key={match.id}>
+              <div className="match-meta">
+                <strong className="inline-match">
+                  <TeamName name={match.team_a} />
+                  <span>x</span>
+                  <TeamName name={match.team_b} />
+                </strong>
+                <span>{match.date} as {String(match.time_brasilia).slice(0, 5)} - {match.group_name || 'Teste'}</span>
+                <small>{match.stadium || match.city || 'Sem local'}</small>
+              </div>
+              <span className={`status-pill ${getStatusClass(status)}`}>
+                {getStatusText(status, match.prediction_open)}
+              </span>
+              <button className="danger-button" onClick={() => deleteMatch(match)} type="button">
+                <Trash2 size={16} />
+                Excluir
+              </button>
+            </article>
+          );
+        })}
         {!testMatches.length && <p className="empty-panel">Nenhum jogo falso criado.</p>}
       </div>
     </section>
   );
+}
+
+function getStatusText(status, predictionOpen) {
+  if (status === 'finished') return 'Finalizado';
+  if (status === 'live') return 'Em andamento';
+  if (status === 'closed') return 'Encerrado';
+  return predictionOpen ? 'Aberto' : 'Bloqueado';
+}
+
+function getStatusClass(status) {
+  if (status === 'live') return 'live';
+  if (status === 'closed' || status === 'finished') return 'closed';
+  return 'active';
 }

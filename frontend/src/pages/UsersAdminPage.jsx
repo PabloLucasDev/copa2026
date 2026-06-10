@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Ban, Shield, Trash2, UserCheck } from 'lucide-react';
+import { Ban, Pencil, Save, Shield, Trash2, UserCheck, UserPlus, X } from 'lucide-react';
 import { api } from '../api.js';
 import { Avatar } from '../components/Avatar.jsx';
+
+const emptyForm = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'user',
+  blocked: false
+};
 
 export function UsersAdminPage({ currentUser }) {
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     loadUsers().catch((error) => setMessage(error.message));
@@ -14,6 +24,42 @@ export function UsersAdminPage({ currentUser }) {
   async function loadUsers() {
     const { users } = await api('/admin/users');
     setUsers(users);
+  }
+
+  async function saveUser(event) {
+    event.preventDefault();
+
+    const payload = {
+      name: form.name,
+      email: form.email,
+      role: form.role,
+      blocked: form.blocked
+    };
+
+    if (form.password) {
+      payload.password = form.password;
+    }
+
+    try {
+      if (editingUser) {
+        await api(`/admin/users/${editingUser.id}`, {
+          method: 'PATCH',
+          body: payload
+        });
+        setMessage('Usuario atualizado.');
+      } else {
+        await api('/admin/users', {
+          method: 'POST',
+          body: { ...payload, password: form.password }
+        });
+        setMessage('Usuario criado.');
+      }
+
+      resetForm();
+      await loadUsers();
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function updateUser(userId, patch) {
@@ -43,6 +89,33 @@ export function UsersAdminPage({ currentUser }) {
     }
   }
 
+  function startCreate() {
+    setEditingUser(null);
+    setForm(emptyForm);
+    setMessage('');
+  }
+
+  function startEdit(user) {
+    setEditingUser(user);
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: '',
+      role: user.role,
+      blocked: Boolean(user.blocked)
+    });
+    setMessage('');
+  }
+
+  function resetForm() {
+    setEditingUser(null);
+    setForm(emptyForm);
+  }
+
+  function updateField(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
   const totals = useMemo(() => {
     return {
       total: users.length,
@@ -57,6 +130,12 @@ export function UsersAdminPage({ currentUser }) {
         <div>
           <h1>Usuarios</h1>
           <p>Gerencie acesso, bloqueios e perfil administrativo dos participantes.</p>
+        </div>
+        <div className="admin-actions">
+          <button onClick={startCreate} type="button">
+            <UserPlus size={16} />
+            Novo usuario
+          </button>
         </div>
       </header>
 
@@ -76,6 +155,64 @@ export function UsersAdminPage({ currentUser }) {
           <strong>{totals.admins}</strong>
         </article>
       </div>
+
+      <form className="admin-panel form-grid user-crud-form" onSubmit={saveUser}>
+        <div className="panel-heading">
+          <h2>{editingUser ? 'Editar usuario' : 'Criar usuario'}</h2>
+          {editingUser && (
+            <button onClick={resetForm} title="Cancelar edicao" type="button">
+              <X size={16} />
+              Cancelar
+            </button>
+          )}
+        </div>
+        <div className="form-row">
+          <label>
+            Nome
+            <input required value={form.name} onChange={(event) => updateField('name', event.target.value)} />
+          </label>
+          <label>
+            E-mail
+            <input required type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} />
+          </label>
+        </div>
+        <div className="form-row user-form-controls">
+          <label>
+            Senha
+            <input
+              minLength={8}
+              placeholder={editingUser ? 'Deixe vazio para manter' : ''}
+              required={!editingUser}
+              type="password"
+              value={form.password}
+              onChange={(event) => updateField('password', event.target.value)}
+            />
+          </label>
+          <label>
+            Perfil
+            <select value={form.role} onChange={(event) => updateField('role', event.target.value)}>
+              <option value="user">Usuario</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <label className="check-filter user-blocked-field">
+            <input checked={form.blocked} type="checkbox" onChange={(event) => updateField('blocked', event.target.checked)} />
+            Bloqueado
+          </label>
+        </div>
+        <div className="button-row">
+          <button className="primary-button" type="submit">
+            {editingUser ? <Save size={16} /> : <UserPlus size={16} />}
+            {editingUser ? 'Salvar usuario' : 'Criar usuario'}
+          </button>
+          {editingUser && (
+            <button onClick={resetForm} type="button">
+              <X size={16} />
+              Cancelar
+            </button>
+          )}
+        </div>
+      </form>
 
       <div className="table-wrap">
         <table>
@@ -112,6 +249,10 @@ export function UsersAdminPage({ currentUser }) {
                     </span>
                   </td>
                   <td className="button-row">
+                    <button onClick={() => startEdit(user)} title="Editar usuario" type="button">
+                      <Pencil size={16} />
+                      Editar
+                    </button>
                     <button
                       disabled={isCurrentUser && !user.blocked}
                       onClick={() => updateUser(user.id, { blocked: !user.blocked })}

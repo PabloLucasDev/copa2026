@@ -1,52 +1,52 @@
-const teamFlags = {
-  Algeria: '🇩🇿',
-  Argentina: '🇦🇷',
-  Australia: '🇦🇺',
-  Austria: '🇦🇹',
-  Belgium: '🇧🇪',
-  'Bosnia and Herzegovina': '🇧🇦',
-  Brazil: '🇧🇷',
-  Canada: '🇨🇦',
-  'Cabo Verde': '🇨🇻',
-  Colombia: '🇨🇴',
-  'Congo DR': '🇨🇩',
-  Croatia: '🇭🇷',
-  Curaçao: '🇨🇼',
-  Czechia: '🇨🇿',
-  Ecuador: '🇪🇨',
-  Egypt: '🇪🇬',
-  England: '🏴',
-  France: '🇫🇷',
-  Germany: '🇩🇪',
-  Ghana: '🇬🇭',
-  Haiti: '🇭🇹',
-  Iraq: '🇮🇶',
-  'IR Iran': '🇮🇷',
-  "Côte d'Ivoire": '🇨🇮',
-  Japan: '🇯🇵',
-  Jordan: '🇯🇴',
-  'Korea Republic': '🇰🇷',
-  Mexico: '🇲🇽',
-  Morocco: '🇲🇦',
-  Netherlands: '🇳🇱',
-  'New Zealand': '🇳🇿',
-  Norway: '🇳🇴',
-  Panama: '🇵🇦',
-  Paraguay: '🇵🇾',
-  Portugal: '🇵🇹',
-  Qatar: '🇶🇦',
-  'Saudi Arabia': '🇸🇦',
-  Scotland: '🏴',
-  Senegal: '🇸🇳',
-  'South Africa': '🇿🇦',
-  Spain: '🇪🇸',
-  Sweden: '🇸🇪',
-  Switzerland: '🇨🇭',
-  Tunisia: '🇹🇳',
-  Türkiye: '🇹🇷',
-  Uruguay: '🇺🇾',
-  USA: '🇺🇸',
-  Uzbekistan: '🇺🇿'
+const teamFlagCodes = {
+  Algeria: 'dz',
+  Argentina: 'ar',
+  Australia: 'au',
+  Austria: 'at',
+  Belgium: 'be',
+  'Bosnia and Herzegovina': 'ba',
+  Brazil: 'br',
+  Canada: 'ca',
+  'Cabo Verde': 'cv',
+  Colombia: 'co',
+  'Congo DR': 'cd',
+  Croatia: 'hr',
+  Curaçao: 'cw',
+  Czechia: 'cz',
+  Ecuador: 'ec',
+  Egypt: 'eg',
+  England: 'gb-eng',
+  France: 'fr',
+  Germany: 'de',
+  Ghana: 'gh',
+  Haiti: 'ht',
+  Iraq: 'iq',
+  'IR Iran': 'ir',
+  "Côte d'Ivoire": 'ci',
+  Japan: 'jp',
+  Jordan: 'jo',
+  'Korea Republic': 'kr',
+  Mexico: 'mx',
+  Morocco: 'ma',
+  Netherlands: 'nl',
+  'New Zealand': 'nz',
+  Norway: 'no',
+  Panama: 'pa',
+  Paraguay: 'py',
+  Portugal: 'pt',
+  Qatar: 'qa',
+  'Saudi Arabia': 'sa',
+  Scotland: 'gb-sct',
+  Senegal: 'sn',
+  'South Africa': 'za',
+  Spain: 'es',
+  Sweden: 'se',
+  Switzerland: 'ch',
+  Tunisia: 'tn',
+  Türkiye: 'tr',
+  Uruguay: 'uy',
+  USA: 'us',
+  Uzbekistan: 'uz'
 };
 
 const teamNamesPt = {
@@ -104,13 +104,37 @@ export function getTeamNamePt(name) {
   return teamNamesPt[name] || name;
 }
 
+export function getTeamFlagUrl(name) {
+  const code = teamFlagCodes[name];
+  return code ? `https://flagcdn.com/${code}.svg` : '';
+}
+
+export function TeamFlag({ name, className = 'team-flag' }) {
+  const flagUrl = getTeamFlagUrl(name);
+
+  if (!flagUrl) return null;
+
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className={className}
+      decoding="async"
+      loading="lazy"
+      onError={(event) => {
+        event.currentTarget.hidden = true;
+      }}
+      src={flagUrl}
+    />
+  );
+}
+
 export function TeamName({ name, align = 'start' }) {
-  const flag = teamFlags[name];
   const displayName = getTeamNamePt(name);
 
   return (
-    <span className={`team-name ${align === 'end' ? 'team-name-end' : ''}`}>
-      {flag && <span className="team-flag" aria-hidden="true">{flag}</span>}
+    <span className={`team-name ${align === 'end' ? 'team-name-end' : ''}`} title={displayName}>
+      <TeamFlag name={name} />
       <span>{displayName}</span>
     </span>
   );

@@ -12,10 +12,11 @@ import { TeamName } from '../components/TeamName.jsx';
 
 const liveMatchDurationMs = 2.5 * 60 * 60 * 1000;
 
-export function DashboardPage({ onNavigate }) {
+export function DashboardPage({ currentUser, onNavigate }) {
   const [matches, setMatches] = useState([]);
   const [ranking, setRanking] = useState([]);
   const [message, setMessage] = useState('');
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     loadDashboardData().catch((error) => setMessage(error.message));
@@ -92,7 +93,7 @@ export function DashboardPage({ onNavigate }) {
       <header className="dashboard-header">
         <div>
           <h1>Visão Geral da Copa</h1>
-          <p>Gerencie resultados, usuários e o ranking do bolão corporativo.</p>
+          <p>{isAdmin ? 'Gerencie resultados, usuários e o ranking do bolão corporativo.' : 'Acompanhe jogos, ranking e movimentação do bolão corporativo.'}</p>
         </div>
         <div className="dashboard-actions">
           <button onClick={exportRanking} type="button">
@@ -110,25 +111,29 @@ export function DashboardPage({ onNavigate }) {
             <div className="panel-heading">
               <h2>
                 <CalendarCheck size={22} />
-                Lançamento de Placares Oficiais
+                {isAdmin ? 'Lançamento de Placares Oficiais' : 'Ranking do Bolão'}
               </h2>
               <span className="phase-select">Fase de Grupos</span>
             </div>
             <RankingBarChart ranking={rankingLeaders} />
-            <div className="score-table">
-              <div className="score-table-head">
-                <span>Data/Hora</span>
-                <span>Mandante</span>
-                <span>Placar Oficial</span>
-                <span>Visitante</span>
-                <span>Status</span>
+            {isAdmin && (
+              <div className="score-table">
+                <div className="score-table-head">
+                  <span>Data/Hora</span>
+                  <span>Mandante</span>
+                  <span>Placar Oficial</span>
+                  <span>Visitante</span>
+                  <span>Status</span>
+                </div>
+                {scoreMatches.map((match) => (
+                  <ScoreRow key={match.id} match={match} onSaveResult={saveResult} />
+                ))}
+                {!scoreMatches.length && <p className="empty-panel">Nenhum jogo pendente de resultado.</p>}
               </div>
-              {scoreMatches.map((match) => (
-                <ScoreRow key={match.id} match={match} onSaveResult={saveResult} />
-              ))}
-              {!scoreMatches.length && <p className="empty-panel">Nenhum jogo pendente de resultado.</p>}
-            </div>
-            <button className="panel-link" onClick={() => onNavigate?.('matches')} type="button">Ver todos os jogos</button>
+            )}
+            <button className="panel-link" onClick={() => onNavigate?.(isAdmin ? 'matches' : 'ranking')} type="button">
+              {isAdmin ? 'Ver todos os jogos' : 'Ver ranking completo'}
+            </button>
           </section>
         </div>
 
@@ -288,6 +293,7 @@ function getMatchTime(match) {
 }
 
 function isMatchLive(match) {
+  if (match.effective_status === 'live') return true;
   if (match.status === 'finished' || match.status === 'closed') return false;
 
   const startsAt = getMatchTime(match);
